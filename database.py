@@ -118,3 +118,20 @@ def get_bot_stats():
         "total_tests": total_tests,
         "total_attempts": total_attempts
     }
+# ==========================================
+# एडमिन डिलीट और मैनेज फीचर्स (Manage Features)
+# ==========================================
+
+def delete_exam(exam_name):
+    """पूरी परीक्षा और उसके सारे टेस्ट डिलीट करना"""
+    categories_col.delete_one({"exam_name": exam_name})
+    tests_col.delete_many({"exam_name": exam_name})
+
+def delete_subject(exam_name, subject_name):
+    """किसी परीक्षा से एक विषय और उसके टेस्ट डिलीट करना"""
+    categories_col.update_one({"exam_name": exam_name}, {"$pull": {"subjects": subject_name}})
+    tests_col.delete_many({"exam_name": exam_name, "subject_name": subject_name})
+
+def delete_test(test_id):
+    """सिर्फ एक टेस्ट डिलीट करना"""
+    tests_col.delete_one({"test_id": test_id})
