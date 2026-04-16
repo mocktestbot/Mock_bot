@@ -13,40 +13,71 @@ def register_admin_handlers(bot):
         return user_id in config.ADMIN_IDS
 
     # ==========================================
-    # 1. स्टैट्स और यूज़र इन्फो (Stats & User Info)
+    # 👑 नया: सुपर एडमिन डैशबोर्ड (Super Admin Panel) 👑
     # ==========================================
-    @bot.message_handler(commands=['stats'])
-    def show_stats(message):
+    @bot.message_handler(commands=['admin', 'panel'])
+    def show_admin_panel(message):
         if not is_admin(message.from_user.id): return
-        stats = database.get_bot_stats()
-        text = (
-            "📊 **बॉट लाइव सांख्यिकी (Live Stats)**\n\n"
-            f"👥 कुल पंजीकृत छात्र: `{stats['total_users']}`\n"
-            f"🚫 बैन किए गए यूज़र्स: `{stats['banned_users']}`\n"
-            f"🎯 कुल मॉक टेस्ट लाइव: `{stats['total_tests']}`\n"
-            f"✍️ कुल दिए गए टेस्ट: `{stats['total_attempts']}`\n"
+        
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton("📊 बॉट के आंकड़े (Stats)", callback_data="adm_stats"))
+        markup.row(
+            InlineKeyboardButton("📝 एग्जाम जोड़ें", callback_data="adm_addexam"),
+            InlineKeyboardButton("📚 विषय जोड़ें", callback_data="adm_addsub")
         )
-        bot.send_message(message.chat.id, text, parse_mode="Markdown")
+        markup.row(InlineKeyboardButton("🎯 नया मॉक टेस्ट डालें", callback_data="adm_addtest"))
+        markup.row(InlineKeyboardButton("🖼️ इमेज लिंक बनाएं", callback_data="adm_getlink"))
+        
+        bot.send_message(
+            message.chat.id, 
+            "👑 **सुपर एडमिन डैशबोर्ड** 👑\n\nनीचे दिए गए बटनों पर क्लिक करके बॉट को कंट्रोल करें। अब आपको कमांड टाइप करने की ज़रूरत नहीं है:",
+            reply_markup=markup,
+            parse_mode="Markdown"
+        )
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("adm_"))
+    def handle_admin_panel_clicks(call):
+        user_id = call.from_user.id
+        chat_id = call.message.chat.id
+        if not is_admin(user_id): return
+        
+        bot.answer_callback_query(call.id) # बटन की लोडिंग रोकने के लिए
+        action = call.data.split("_")[1]
+        
+        if action == "stats":
+            stats = database.get_bot_stats()
+            text = (
+                "📊 **बॉट लाइव सांख्यिकी (Live Stats)**\n\n"
+                f"👥 कुल पंजीकृत छात्र: `{stats['total_users']}`\n"
+                f"🚫 बैन किए गए यूज़र्स: `{stats['banned_users']}`\n"
+                f"🎯 कुल मॉक टेस्ट लाइव: `{stats['total_tests']}`\n"
+                f"✍️ कुल दिए गए टेस्ट: `{stats['total_attempts']}`\n"
+            )
+            bot.send_message(chat_id, text, parse_mode="Markdown")
+            
+        elif action == "addexam":
+            msg = bot.send_message(chat_id, "📝 **नई परीक्षा का नाम टाइप करें:** (उदा: UP Police)")
+            bot.register_next_step_handler(msg, process_add_exam)
+            
+        elif action == "addsub":
+            msg = bot.send_message(chat_id, "📚 **किस परीक्षा में विषय जोड़ना है? (परीक्षा का नाम लिखें):**")
+            bot.register_next_step_handler(msg, process_add_subject_exam)
+            
+        elif action == "addtest":
+            msg = bot.send_message(chat_id, "🎯 **टेस्ट का ID टाइप करें** (उदा: ssc_gk_01):")
+            bot.register_next_step_handler(msg, step_exam_name)
+            
+        elif action == "getlink":
+            msg = bot.send_message(chat_id, "🖼️ **लिंक बनाने के लिए कृपया मुझे एक फोटो (डायग्राम) भेजें:**")
+            bot.register_next_step_handler(msg, process_image_for_link)
 
     # ==========================================
-    # 2. एग्जाम और विषय जोड़ना (Add Exam & Subject)
+    # 2. एग्जाम और विषय जोड़ने के फंक्शन 
     # ==========================================
-    @bot.message_handler(commands=['addexam'])
-    def add_exam(message):
-        if not is_admin(message.from_user.id): return
-        msg = bot.send_message(message.chat.id, "📝 **नई परीक्षा का नाम टाइप करें:** (उदा: UP Police)")
-        bot.register_next_step_handler(msg, process_add_exam)
-
     def process_add_exam(message):
         exam_name = message.text.strip()
-        database.add_category(exam_name, "General") # डिफ़ॉल्ट विषय
+        database.add_category(exam_name, "General")
         bot.send_message(message.chat.id, f"✅ **{exam_name}** परीक्षा सफलतापूर्वक जोड़ दी गई है।")
-
-    @bot.message_handler(commands=['addsubject'])
-    def add_subject(message):
-        if not is_admin(message.from_user.id): return
-        msg = bot.send_message(message.chat.id, "📚 **किस परीक्षा में विषय जोड़ना है? (परीक्षा का नाम लिखें):**")
-        bot.register_next_step_handler(msg, process_add_subject_exam)
 
     def process_add_subject_exam(message):
         exam_name = message.text.strip()
@@ -59,22 +90,17 @@ def register_admin_handlers(bot):
         bot.send_message(message.chat.id, f"✅ **{exam_name}** में **{subject_name}** विषय जोड़ दिया गया है।")
 
     # ==========================================
-    # 3. इमेज के लिए टेलीग्राफ लिंक (Get Link)
+    # 3. इमेज के लिए टेलीग्राफ लिंक बनाने का फंक्शन
     # ==========================================
-    @bot.message_handler(commands=['getlink'], content_types=['photo'])
-    def generate_image_link(message):
-        if not is_admin(message.from_user.id): return
-        
+    def process_image_for_link(message):
         if message.content_type != 'photo':
-            bot.send_message(message.chat.id, "⚠️ कृपया इस कमांड के साथ एक फोटो (डायग्राम) भेजें।")
+            bot.send_message(message.chat.id, "⚠️ कृपया सिर्फ फोटो भेजें। प्रक्रिया रद्द हो गई।")
             return
-
         bot.send_message(message.chat.id, "⏳ फोटो अपलोड हो रही है...")
         try:
             file_info = bot.get_file(message.photo[-1].file_id)
             downloaded_file = bot.download_file(file_info.file_path)
             
-            # Telegraph सर्वर पर भेजना
             response = requests.post(
                 'https://telegra.ph/upload',
                 files={'file': ('image.jpg', downloaded_file, 'image/jpeg')}
@@ -89,14 +115,8 @@ def register_admin_handlers(bot):
             bot.send_message(message.chat.id, f"❌ एरर: {e}")
 
     # ==========================================
-    # 4. टेस्ट अपलोड सिस्टम (Add Test Flow)
+    # 4. टेस्ट अपलोड सिस्टम (Test Upload Flow)
     # ==========================================
-    @bot.message_handler(commands=['addtest'])
-    def start_add_test(message):
-        if not is_admin(message.from_user.id): return
-        msg = bot.send_message(message.chat.id, "🎯 **टेस्ट का ID टाइप करें** (उदा: ssc_gk_01):")
-        bot.register_next_step_handler(msg, step_exam_name)
-
     def step_exam_name(message):
         test_id = message.text.strip()
         msg = bot.send_message(message.chat.id, "📝 **परीक्षा का नाम लिखें** (उदा: SSC GD):")
@@ -123,7 +143,7 @@ def register_admin_handlers(bot):
             msg = bot.send_message(message.chat.id, "📂 **शानदार! अब प्रश्नों वाली `.json` फाइल अपलोड करें:**")
             bot.register_next_step_handler(msg, lambda m: process_json_file(m, test_id, exam_name, subject_name, test_name, cutoff))
         except ValueError:
-            bot.send_message(message.chat.id, "❌ कट-ऑफ सिर्फ अंकों (Numbers) में होनी चाहिए। प्रक्रिया रद्द हो गई। दोबारा /addtest टाइप करें।")
+            bot.send_message(message.chat.id, "❌ कट-ऑफ सिर्फ अंकों में होनी चाहिए। दोबारा एडमिन पैनल से शुरुआत करें।")
 
     def process_json_file(message, test_id, exam_name, subject_name, test_name, cutoff):
         if message.document and message.document.file_name.endswith('.json'):
@@ -132,7 +152,6 @@ def register_admin_handlers(bot):
                 downloaded_file = bot.download_file(file_info.file_path)
                 questions_data = json.loads(downloaded_file)
 
-                # डेटाबेस में सेव करना (शुरुआत में is_public = False रहेगा)
                 database.save_test(
                     test_id=test_id, exam_name=exam_name, subject_name=subject_name,
                     test_name=test_name, pos_mark=config.DEFAULT_POSITIVE_MARK,
@@ -140,7 +159,6 @@ def register_admin_handlers(bot):
                     questions_data=questions_data
                 )
 
-                # प्रीव्यू और पब्लिक बटन
                 markup = InlineKeyboardMarkup()
                 preview_url = f"{config.WEBAPP_BASE_URL}{test_id}"
                 markup.add(InlineKeyboardButton("👁️ टेस्ट प्रीव्यू करें (Preview)", url=preview_url))
@@ -148,10 +166,7 @@ def register_admin_handlers(bot):
 
                 bot.send_message(
                     message.chat.id, 
-                    f"✅ **टेस्ट सफलतापूर्वक डेटाबेस में सेव हो गया है!**\n\n"
-                    f"कुल प्रश्न: {len(questions_data)}\n"
-                    f"कट-ऑफ: {cutoff}\n\n"
-                    f"कृपया पब्लिक करने से पहले प्रीव्यू बटन पर क्लिक करके टेस्ट चेक कर लें।", 
+                    f"✅ **टेस्ट सेव हो गया है!**\n\nकुल प्रश्न: {len(questions_data)}\nकट-ऑफ: {cutoff}\n\nकृपया चेक करने के बाद पब्लिक करें।", 
                     reply_markup=markup
                 )
             except Exception as e:
@@ -159,7 +174,6 @@ def register_admin_handlers(bot):
         else:
             bot.send_message(message.chat.id, "❌ कृपया एक वैध `.json` फाइल भेजें।")
 
-    # टेस्ट पब्लिक करने का बटन क्लिक
     @bot.callback_query_handler(func=lambda call: call.data.startswith("publish_"))
     def publish_test(call):
         if not is_admin(call.from_user.id): return
@@ -168,7 +182,7 @@ def register_admin_handlers(bot):
         
         bot.edit_message_text("✅ **टेस्ट सफलतापूर्वक पब्लिक (लाइव) कर दिया गया है!**", call.message.chat.id, call.message.message_id)
         
-        # चैनल में नोटिफिकेशन भेजना
+        # चैनल में नोटिफिकेशन
         bot.send_message(
             config.PUBLIC_CHANNEL_ID, 
             f"🚀 **नया मॉक टेस्ट उपलब्ध है!**\n\n🎯 अभी बॉट में जाएं और अपना टेस्ट दें।"
