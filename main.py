@@ -53,10 +53,24 @@ try:
             if database.register_user(user_id, first_name, message.from_user.username or ""):
                 try:
                     log_id = os.getenv("LOG_CHANNEL_ID")
-                    if log_id: bot.send_message(log_id, f"🆕 **नया छात्र:**\n👤 {first_name}\n🔗 `{user_id}`\n🌐 @{message.from_user.username}")
+                    if log_id: bot.send_message(log_id, f"🆕 **नया छात्र:**\n👤 {first_name}\n🔗 `{user_id}`")
                 except: pass
 
-            welcome_text = f"🎯 **स्वागत है {first_name}!** 🇮🇳\n\n👇 **अपनी तैयारी शुरू करने के लिए नीचे अपना 'टारगेट एग्जाम' चुनें:**"
+            # 🎯 आपका पुराना वाला ओरिजिनल स्टार्ट मैसेज
+            welcome_text = (
+                f"🎯 **स्वागत है {first_name}!** 🇮🇳\n"
+                "वर्दी के आपके सपने को हकीकत में बदलने के लिए हम तैयार हैं।\n\n"
+                "यह सिर्फ एक बॉट नहीं, आपका **स्मार्ट टेस्ट सेंटर** है। यहाँ आपको मिलता है असली परीक्षा (CBT) वाला अनुभव:\n\n"
+                "✨ **हमारे मुख्य फीचर्स:**\n"
+                "⏱ **लाइव टेस्ट इंटरफेस:** बिल्कुल असली परीक्षा पैटर्न वाला टाइमर।\n"
+                "📊 **तुरंत स्कोरकार्ड:** टेस्ट सबमिट करते ही अपना रिज़ल्ट जानें।\n"
+                "🏆 **रीयल-टाइम रैंक:** लीडरबोर्ड पर देखें कि आप कंपटीशन में कहाँ हैं।\n"
+                "📂 **टेस्ट हिस्ट्री:** अपने पिछले सभी स्कोर्स का रिकॉर्ड एक ही जगह पाएं।\n\n"
+                "👇 **अपनी तैयारी शुरू करने के लिए नीचे अपना 'टारगेट एग्जाम' चुनें:**\n\n"
+                "⚠️ **डिस्क्लेमर (Disclaimer):**\n"
+                "*इस बॉट पर उपलब्ध सभी मॉक टेस्ट और सामग्री केवल छात्रों की शिक्षा (Educational Purposes) और अभ्यास के लिए है। इसका उद्देश्य किसी भी संस्थान के कॉपीराइट का उल्लंघन करना नहीं है। किसी भी विवाद के लिए एडमिन ज़िम्मेदार नहीं होगा।*"
+            )
+
             bot.send_message(user_id, welcome_text, reply_markup=get_main_menu_markup(), parse_mode='Markdown')
         except Exception as e: print(f"❌ Start Error: {e}")
 
@@ -110,7 +124,7 @@ try:
         
         if call.data == "menu_myscore":
             scores = database.get_user_scores(call.from_user.id)
-            if not scores: bot.edit_message_text("🚧 कोई टेस्ट नहीं दिया है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
+            if not scores: bot.edit_message_text("🚧 आपने अभी तक कोई टेस्ट नहीं दिया है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
             else:
                 text = "📊 **आपका रिपोर्ट कार्ड:**\n\n"
                 for s in scores: text += f"📝 {s['test_name']} | अंक: `{s['score']}` | सटीकता: `{s['accuracy']}%`\n"
@@ -118,7 +132,7 @@ try:
                 
         elif call.data == "menu_leaderboard":
             top = database.get_top_scorers()
-            if not top: bot.edit_message_text("🚧 खाली है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
+            if not top: bot.edit_message_text("🚧 अभी लीडरबोर्ड खाली है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
             else:
                 text = "🏆 **टॉप 10 लीडरबोर्ड** 🏆\n\n"
                 for i, s in enumerate(top): text += f"{i+1}. {s['first_name']} - `{s['score']}` अंक\n"
