@@ -89,10 +89,33 @@ def register_admin_handlers(bot):
             else: bot.send_message(message.chat.id, "❌ यह यूज़र डेटाबेस में नहीं मिला।")
         except: bot.send_message(message.chat.id, "❌ कृपया सही नंबर (ID) डालें।")
 
-    def make_image_link(message):
+       def make_image_link(message):
         if message.content_type != 'photo':
             bot.send_message(message.chat.id, "⚠️ कृपया सिर्फ फोटो भेजें।"); return
+        
         load_msg = bot.send_message(message.chat.id, "⏳ फोटो सर्वर पर अपलोड हो रही है...")
+        try:
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            # कोशिश 1: Catbox API
+            res = requests.post('https://catbox.moe/user/api.php', data={'reqtype': 'fileupload'}, files={'fileToUpload': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=15)
+            if res.status_code == 200 and "catbox.moe" in res.text:
+                mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
+                bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`{res.text}`", message.chat.id, load_msg.message_id, reply_markup=mk)
+                return
+                
+            # कोशिश 2: अगर Catbox फेल हो जाए, तो Telegraph का इस्तेमाल करेगा
+            res2 = requests.post('https://telegra.ph/upload', files={'file': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=15)
+            if res2.status_code == 200 and 'src' in res2.json()[0]:
+                mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
+                bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`https://telegra.ph{res2.json()[0]['src']}`", message.chat.id, load_msg.message_id, reply_markup=mk)
+            else: 
+                bot.edit_message_text("❌ दोनों सर्वर (Catbox/Telegraph) फेल हो गए। कृपया थोड़ी देर बाद प्रयास करें।", message.chat.id, load_msg.message_id)
+                
+        except Exception as e:
+            bot.edit_message_text(f"❌ सर्वर एरर: API जवाब नहीं दे रहा।", message.chat.id, load_msg.message_id)
+
         try:
             file_info = bot.get_file(message.photo[-1].file_id)
             downloaded_file = bot.download_file(file_info.file_path)
