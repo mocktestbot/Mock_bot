@@ -125,9 +125,12 @@ def send_reply_to_user(message, target):
         bot.send_message(message.chat.id, "❌ एरर।")
 
 if __name__ == "__main__":
-    print("🚀 Bot Started...")
+    import sys
+    print("🚀 Bot is starting...", flush=True)
     while True:
         try:
             bot.infinity_polling(timeout=20, long_polling_timeout=10)
-        except Exception:
+        except Exception as e:
+            print(f"❌ CRASH AVOIDED: {e}", flush=True)
             time.sleep(5)
+
