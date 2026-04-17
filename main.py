@@ -119,7 +119,8 @@ try:
         
         name_encoded = urllib.parse.quote(call.from_user.first_name)
         for t in tests:
-            test_url = f"{config.WEBAPP_BASE_URL}{t['test_id']}&uid={user_id}&name={name_encoded}"
+            # 🚀 FIX: Cache Buster लगा दिया गया है ताकि हमेशा नया टाइमर और नंबर लोड हों!
+            test_url = f"{config.WEBAPP_BASE_URL}{t['test_id']}&uid={user_id}&name={name_encoded}&v={int(time.time())}"
             markup.add(InlineKeyboardButton(f"📝 {t['test_name']}", web_app=WebAppInfo(url=test_url)))
             
         markup.add(InlineKeyboardButton("🔙 विषय सूची पर जाएं", callback_data=f"st_ex_{exam_name}"))
@@ -134,9 +135,6 @@ try:
         )
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
-    # ==========================================
-    # 📊 स्कोरकार्ड फ्लो (मेरा स्कोर) - 100% FIXED
-    # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data == "menu_myscore")
     def my_score_main(call):
         bot.answer_callback_query(call.id)
@@ -171,7 +169,6 @@ try:
         mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_ex_{exam}"))
         bot.edit_message_text(f"📊 **विषय:** {sub}\n━━━━━━━━━━━━━━━━━━\n👇 **स्कोर देखने के लिए टेस्ट चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
 
-    # 🛠️ FIX: पुराने डेटा की वजह से आने वाला एरर ठीक कर दिया
     @bot.callback_query_handler(func=lambda call: call.data.startswith("sc_ts_"))
     def my_score_test(call):
         bot.answer_callback_query(call.id)
@@ -192,16 +189,14 @@ try:
             mk = InlineKeyboardMarkup()
             user_id = call.from_user.id
             name_encoded = urllib.parse.quote(call.from_user.first_name)
-            test_url = f"{config.WEBAPP_BASE_URL}{tid}&uid={user_id}&name={name_encoded}"
+            # 🚀 FIX: यहाँ भी Cache Buster लगा दिया है 
+            test_url = f"{config.WEBAPP_BASE_URL}{tid}&uid={user_id}&name={name_encoded}&v={int(time.time())}"
             mk.add(InlineKeyboardButton("🔄 टेस्ट फिर से दें (Reattempt)", web_app=WebAppInfo(url=test_url)))
             mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_su_{score_data.get('exam_name', 'Unknown')}_{score_data.get('subject_name', 'Unknown')}"))
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
         else:
             bot.edit_message_text("❌ टेस्ट का डेटा नहीं मिला।", call.message.chat.id, call.message.message_id, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस", callback_data="menu_myscore")))
 
-    # ==========================================
-    # 🏆 लीडरबोर्ड और शिकायत
-    # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data in ["menu_leaderboard", "menu_complaint"] or call.data.startswith("reply_"))
     def handle_general_menu(call):
         mk_back = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="menu_main"))
