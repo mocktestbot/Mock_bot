@@ -36,8 +36,12 @@ def get_subjects_by_exam(exam_name):
     doc = categories_col.find_one({"exam_name": exam_name})
     return doc.get("subjects", []) if doc else []
 
-def save_test(test_id, exam_name, subject_name, test_name, pos_mark, neg_mark, cutoff, questions_data):
-    tests_col.insert_one({"test_id": test_id, "exam_name": exam_name, "subject_name": subject_name, "test_name": test_name, "positive_mark": pos_mark, "negative_mark": neg_mark, "cutoff": cutoff, "is_public": False, "questions": questions_data})
+def save_test(test_id, exam_name, subject_name, test_name, pos_mark, neg_mark, cutoff, time_limit, questions_data):
+    tests_col.insert_one({
+        "test_id": test_id, "exam_name": exam_name, "subject_name": subject_name, 
+        "test_name": test_name, "positive_mark": pos_mark, "negative_mark": neg_mark, 
+        "cutoff": cutoff, "time_limit": time_limit, "is_public": False, "questions": questions_data
+    })
 
 def make_test_public(test_id):
     tests_col.update_one({"test_id": test_id}, {"$set": {"is_public": True}})
