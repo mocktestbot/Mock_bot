@@ -8,7 +8,8 @@ import database
 admin_data = {}
 
 def register_admin_handlers(bot):
-    def is_admin(user_id): return str(user_id) in config.ADMIN_IDS
+    def is_admin(user_id):
+        return str(user_id) in config.ADMIN_IDS
 
     @bot.message_handler(commands=['admin', 'panel'])
     def show_admin_panel(message):
@@ -73,8 +74,11 @@ def register_admin_handlers(bot):
         bot.send_message(message.chat.id, f"⏳ ब्रॉडकास्ट शुरू... (कुल: {len(users)})")
         success = 0
         for user_id in users:
-            try: bot.copy_message(user_id, message.chat.id, message.message_id); success += 1
-            except: pass 
+            try:
+                bot.copy_message(user_id, message.chat.id, message.message_id)
+                success += 1
+            except:
+                pass 
         bot.send_message(message.chat.id, f"✅ सफलतापुर्वक भेजा गया: {success} छात्रों को।", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 पैनल पर जाएँ", callback_data="adm_main")))
 
     def process_userinfo(message):
@@ -86,36 +90,16 @@ def register_admin_handlers(bot):
                 date = info['join_date'].strftime('%d-%m-%Y') if 'join_date' in info else "N/A"
                 text = (f"👤 **यूज़र की जानकारी:**\n\n🆔 **ID:** `{info['user_id']}`\n📛 **नाम:** {info.get('first_name', 'N/A')}\n🌐 **Username:** @{info.get('username', 'N/A')}\n📅 **जॉइन डेट:** {date}\n✍️ **कुल टेस्ट दिए:** {info.get('total_tests_attempted', 0)}\n🛡️ **स्टेटस:** {status}")
                 bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस", callback_data="adm_main")))
-            else: bot.send_message(message.chat.id, "❌ यह यूज़र डेटाबेस में नहीं मिला।")
-        except: bot.send_message(message.chat.id, "❌ कृपया सही नंबर (ID) डालें।")
+            else:
+                bot.send_message(message.chat.id, "❌ यह यूज़र डेटाबेस में नहीं मिला।")
+        except:
+            bot.send_message(message.chat.id, "❌ कृपया सही नंबर (ID) डालें।")
 
-       def make_image_link(message):
+    def make_image_link(message):
         if message.content_type != 'photo':
-            bot.send_message(message.chat.id, "⚠️ कृपया सिर्फ फोटो भेजें।"); return
-        
+            bot.send_message(message.chat.id, "⚠️ कृपया सिर्फ फोटो भेजें।")
+            return
         load_msg = bot.send_message(message.chat.id, "⏳ फोटो सर्वर पर अपलोड हो रही है...")
-        try:
-            file_info = bot.get_file(message.photo[-1].file_id)
-            downloaded_file = bot.download_file(file_info.file_path)
-            
-            # कोशिश 1: Catbox API
-            res = requests.post('https://catbox.moe/user/api.php', data={'reqtype': 'fileupload'}, files={'fileToUpload': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=15)
-            if res.status_code == 200 and "catbox.moe" in res.text:
-                mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
-                bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`{res.text}`", message.chat.id, load_msg.message_id, reply_markup=mk)
-                return
-                
-            # कोशिश 2: अगर Catbox फेल हो जाए, तो Telegraph का इस्तेमाल करेगा
-            res2 = requests.post('https://telegra.ph/upload', files={'file': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=15)
-            if res2.status_code == 200 and 'src' in res2.json()[0]:
-                mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
-                bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`https://telegra.ph{res2.json()[0]['src']}`", message.chat.id, load_msg.message_id, reply_markup=mk)
-            else: 
-                bot.edit_message_text("❌ दोनों सर्वर (Catbox/Telegraph) फेल हो गए। कृपया थोड़ी देर बाद प्रयास करें।", message.chat.id, load_msg.message_id)
-                
-        except Exception as e:
-            bot.edit_message_text(f"❌ सर्वर एरर: API जवाब नहीं दे रहा।", message.chat.id, load_msg.message_id)
-
         try:
             file_info = bot.get_file(message.photo[-1].file_id)
             downloaded_file = bot.download_file(file_info.file_path)
@@ -123,13 +107,11 @@ def register_admin_handlers(bot):
             if res.status_code == 200:
                 mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
                 bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`{res.text}`", message.chat.id, load_msg.message_id, reply_markup=mk)
-            else: bot.edit_message_text("❌ अपलोड फेल।", message.chat.id, load_msg.message_id)
+            else:
+                bot.edit_message_text("❌ अपलोड फेल।", message.chat.id, load_msg.message_id)
         except Exception as e:
             bot.edit_message_text(f"❌ सर्वर एरर: {e}", message.chat.id, load_msg.message_id)
 
-    # ==========================================
-    # 🎯 टेस्ट अपलोड फ्लो (समय और माइनस मार्किंग सहित)
-    # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data.startswith("ad_sub_ex_"))
     def step_add_sub(call):
         bot.answer_callback_query(call.id)
@@ -172,28 +154,32 @@ def register_admin_handlers(bot):
             admin_data[m.from_user.id]['cutoff'] = float(m.text.strip())
             msg = bot.send_message(m.chat.id, "⏱ **टेस्ट का समय (Time Limit) कितने मिनट का होगा?** (उदा: 15, 30):")
             bot.register_next_step_handler(msg, step_t_time)
-        except ValueError: bot.send_message(m.chat.id, "❌ कृपया सिर्फ अंक लिखें।")
+        except ValueError:
+            bot.send_message(m.chat.id, "❌ कृपया सिर्फ अंक लिखें।")
 
     def step_t_time(m):
         try:
             admin_data[m.from_user.id]['time_limit'] = int(m.text.strip())
             msg = bot.send_message(m.chat.id, "✅ **सही उत्तर (Positive Marking) पर कितने अंक देने हैं?** (उदा: 2.0 या 1.0):")
             bot.register_next_step_handler(msg, step_t_pos)
-        except ValueError: bot.send_message(m.chat.id, "❌ कृपया सिर्फ मिनट (अंक) लिखें।")
+        except ValueError:
+            bot.send_message(m.chat.id, "❌ कृपया सिर्फ मिनट (अंक) लिखें।")
 
     def step_t_pos(m):
         try:
             admin_data[m.from_user.id]['pos_mark'] = float(m.text.strip())
             msg = bot.send_message(m.chat.id, "❌ **गलत उत्तर (Negative Marking) पर कितने अंक काटने हैं?** (उदा: 0.25 या 0.50):")
             bot.register_next_step_handler(msg, step_t_neg)
-        except ValueError: bot.send_message(m.chat.id, "❌ कृपया सिर्फ अंक लिखें।")
+        except ValueError:
+            bot.send_message(m.chat.id, "❌ कृपया सिर्फ अंक लिखें।")
 
     def step_t_neg(m):
         try:
             admin_data[m.from_user.id]['neg_mark'] = float(m.text.strip())
             msg = bot.send_message(m.chat.id, "📂 **शानदार! अब प्रश्नों वाली `.json` फाइल भेजें:**")
             bot.register_next_step_handler(msg, process_j)
-        except ValueError: bot.send_message(m.chat.id, "❌ कृपया सिर्फ अंक लिखें।")
+        except ValueError:
+            bot.send_message(m.chat.id, "❌ कृपया सिर्फ अंक लिखें।")
 
     def process_j(m):
         d = admin_data.get(m.from_user.id)
@@ -205,8 +191,10 @@ def register_admin_handlers(bot):
                 preview_url = f"{config.WEBAPP_BASE_URL}{d['id']}"
                 mk = InlineKeyboardMarkup().add(InlineKeyboardButton("👁️ प्रीव्यू", web_app=WebAppInfo(url=preview_url))).add(InlineKeyboardButton("📢 पब्लिक करें", callback_data=f"pub_{d['id']}"))
                 bot.send_message(m.chat.id, f"✅ **सेव हो गया!**\n⏱ समय: {d['time_limit']} मिनट\n✅ सही: +{d['pos_mark']} | ❌ गलत: -{d['neg_mark']}", reply_markup=mk)
-            except Exception as e: bot.send_message(m.chat.id, f"❌ फाइल एरर: {e}")
-        else: bot.send_message(m.chat.id, "❌ कृपया `.json` फाइल भेजें।")
+            except Exception as e:
+                bot.send_message(m.chat.id, f"❌ फाइल एरर: {e}")
+        else:
+            bot.send_message(m.chat.id, "❌ कृपया `.json` फाइल भेजें।")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pub_"))
     def pub_t(call):
@@ -264,4 +252,5 @@ def register_admin_handlers(bot):
             tid = int(m.text.strip())
             database.update_ban_status(tid, not database.check_banned(tid))
             bot.send_message(m.chat.id, f"✅ बैन स्टेटस बदल दिया गया।", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 पैनल पर जाएँ", callback_data="adm_main")))
-        except: bot.send_message(m.chat.id, "❌ गलत ID")
+        except:
+            bot.send_message(m.chat.id, "❌ गलत ID")
