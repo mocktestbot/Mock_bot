@@ -72,9 +72,6 @@ def get_all_users():
 def get_user_info(user_id):
     return users_col.find_one({"user_id": user_id}, {"_id": 0})
 
-# ==========================================
-# 📊 स्कोरकार्ड और स्मार्ट लीडरबोर्ड (Fixed)
-# ==========================================
 def save_score(user_id, first_name, test_id, test_name, score, accuracy):
     t_info = get_test_details(test_id)
     exam_name = t_info['exam_name'] if t_info else "General"
@@ -107,9 +104,10 @@ def get_attempted_tests(user_id, exam_name, subject_name):
 def get_test_scorecard(user_id, test_id):
     return scores_col.find_one({"user_id": user_id, "test_id": test_id}, sort=[("date", -1)])
 
+# 🏆 FIX: पुराने डेटा को भी शामिल करने के लिए Query बदल दी गई है
 def get_smart_leaderboard(user_id):
     pipeline = [
-        {"$match": {"is_first_attempt": True}},
+        {"$match": {"$or": [{"is_first_attempt": True}, {"is_first_attempt": {"$exists": False}}]}},
         {"$group": {"_id": "$user_id", "first_name": {"$first": "$first_name"}, "total_score": {"$sum": "$score"}}},
         {"$sort": {"total_score": -1}}
     ]
