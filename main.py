@@ -1,36 +1,48 @@
-# main.py
 import sys
 import traceback
 import os
 import time
+import urllib.parse
 
 try:
     import telebot
-    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
     import config
     import database
     import admin
 
-    print("🔄 Checking Token and Starting Bot...", flush=True)
     bot = telebot.TeleBot(config.BOT_TOKEN)
     admin.register_admin_handlers(bot)
 
-    # ==========================================
-    # 1. स्टार्ट कमांड और मुख्य मेनू (पुराने लंबे मैसेज के साथ)
-    # ==========================================
+    def is_subscribed(user_id):
+        if str(user_id) in config.ADMIN_IDS: return True
+        try:
+            status = bot.get_chat_member(config.PUBLIC_CHANNEL_ID, user_id).status
+            return status in ['member', 'administrator', 'creator']
+        except: return True
+
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
         try:
             user_id = message.from_user.id
             first_name = message.from_user.first_name
 
-            if database.check_banned(user_id):
-                bot.send_message(user_id, "❌ आपको एडमिन द्वारा प्रतिबंधित (Ban) कर दिया गया है।")
+            if not is_subscribed(user_id):
+                mk = InlineKeyboardMarkup()
+                mk.add(InlineKeyboardButton("📢 पहले चैनल ज्वाइन करें", url=os.getenv("CHANNEL_LINK", "https://t.me/telegram")))
+                mk.add(InlineKeyboardButton("✅ मैंने ज्वाइन कर लिया है", callback_data="check_sub"))
+                bot.send_message(user_id, "🛑 **टेस्ट देने के लिए पहले हमारा मुख्य चैनल ज्वाइन करना अनिवार्य है!**\n\nनीचे दिए गए बटन पर क्लिक करके चैनल से जुड़ें और फिर 'मैंने ज्वाइन कर लिया है' पर क्लिक करें।", reply_markup=mk, parse_mode="Markdown")
                 return
 
-            database.register_user(user_id, first_name, message.from_user.username or "")
+            if database.check_banned(user_id):
+                bot.send_message(user_id, "❌ आपको एडमिन द्वारा प्रतिबंधित कर दिया गया है।"); return
 
-            # 🎯 आपका पुराना और सबसे शानदार स्टार्ट मैसेज 🎯
+            if database.register_user(user_id, first_name, message.from_user.username or ""):
+                try:
+                    log_id = os.getenv("LOG_CHANNEL_ID")
+                    if log_id: bot.send_message(log_id, f"🆕 **नया छात्र जुड़ा:**\n👤 नाम: {first_name}\n🔗 ID: `{user_id}`\n🌐 Username: @{message.from_user.username}", parse_mode="Markdown")
+                except: pass
+
             welcome_text = (
                 f"🎯 **स्वागत है {first_name}!** 🇮🇳\n"
                 "वर्दी के आपके सपने को हकीकत में बदलने के लिए हम तैयार हैं।\n\n"
@@ -47,116 +59,102 @@ try:
 
             markup = InlineKeyboardMarkup()
             exams = database.get_all_exams()
-            
-            if not exams:
-                markup.row(InlineKeyboardButton("🚧 अभी डेटा उपलब्ध नहीं है", callback_data="no_data"))
+            if not exams: markup.row(InlineKeyboardButton("🚧 अभी डेटा उपलब्ध नहीं है", callback_data="no_data"))
             else:
                 exam_buttons = [InlineKeyboardButton(exam, callback_data=f"st_ex_{exam}") for exam in exams]
                 for i in range(0, len(exam_buttons), 2): markup.row(*exam_buttons[i:i+2])
             
             markup.row(InlineKeyboardButton("📊 मेरा स्कोर", callback_data="menu_myscore"), InlineKeyboardButton("🏆 लीडरबोर्ड", callback_data="menu_leaderboard"))
-            
-            channel_link = os.getenv("CHANNEL_LINK", "https://t.me/telegram")
-            markup.row(InlineKeyboardButton("📢 हमारा चैनल", url=channel_link), InlineKeyboardButton("🎧 सहायता / शिकायत", callback_data="menu_complaint"))
+            markup.row(InlineKeyboardButton("📢 हमारा चैनल", url=os.getenv("CHANNEL_LINK", "https://t.me/telegram")), InlineKeyboardButton("🎧 सहायता / शिकायत", callback_data="menu_complaint"))
 
             bot.send_message(user_id, welcome_text, reply_markup=markup, parse_mode='Markdown')
-        except Exception as e:
-            print(f"❌ Start Command Error: {e}", flush=True)
+        except Exception as e: print(f"❌ Start Error: {e}", flush=True)
 
-    # ==========================================
-    # 2. छात्रों के एग्जाम -> विषय -> टेस्ट का फ्लो
-    # ==========================================
+    @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
+    def check_sub_call(call):
+        if is_subscribed(call.from_user.id):
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+            send_welcome(call.message)
+        else: bot.answer_callback_query(call.id, "❌ आपने अभी तक चैनल ज्वाइन नहीं किया है!", show_alert=True)
+
     student_sessions = {}
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("st_ex_"))
     def handle_student_exam(call):
         bot.answer_callback_query(call.id)
         exam_name = call.data.replace("st_ex_", "")
-        user_id = call.from_user.id
-        student_sessions[user_id] = {'exam': exam_name}
-        
+        student_sessions[call.from_user.id] = {'exam': exam_name}
         subjects = database.get_subjects_by_exam(exam_name)
-        if not subjects:
-            bot.send_message(call.message.chat.id, f"🚧 **{exam_name}** में अभी विषय जोड़े जा रहे हैं।")
-            return
-            
+        if not subjects: bot.send_message(call.message.chat.id, "🚧 विषय जोड़े जा रहे हैं।"); return
         markup = InlineKeyboardMarkup()
         for sub in subjects: markup.add(InlineKeyboardButton(sub, callback_data=f"st_su_{sub}"))
-        bot.edit_message_text(f"🎯 परीक्षा: **{exam_name}**\n📚 **अब अपना विषय (Subject) चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
+        bot.edit_message_text(f"🎯 परीक्षा: **{exam_name}**\n📚 **अपना विषय चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("st_su_"))
     def handle_student_subject(call):
         bot.answer_callback_query(call.id)
         sub_name = call.data.replace("st_su_", "")
         user_id = call.from_user.id
-        
-        if user_id not in student_sessions: return
-        exam_name = student_sessions[user_id].get('exam')
-        
+        exam_name = student_sessions.get(user_id, {}).get('exam')
         tests = database.get_public_tests(exam_name, sub_name)
-        if not tests:
-            bot.send_message(call.message.chat.id, f"🚧 **{sub_name}** के टेस्ट अभी उपलब्ध नहीं हैं।")
-            return
-            
+        if not tests: bot.send_message(call.message.chat.id, "🚧 टेस्ट उपलब्ध नहीं हैं।"); return
+        
         markup = InlineKeyboardMarkup()
+        name_encoded = urllib.parse.quote(call.from_user.first_name)
         for t in tests:
-            test_url = f"{config.WEBAPP_BASE_URL}{t['test_id']}"
-            markup.add(InlineKeyboardButton(f"📝 {t['test_name']}", url=test_url))
+            test_url = f"{config.WEBAPP_BASE_URL}{t['test_id']}&uid={user_id}&name={name_encoded}"
+            markup.add(InlineKeyboardButton(f"📝 {t['test_name']}", web_app=WebAppInfo(url=test_url)))
             
-        bot.edit_message_text(f"📚 विषय: **{sub_name}**\n👇 **नीचे दिए गए टेस्ट पर क्लिक करके शुरू करें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
+        bot.edit_message_text(f"📚 विषय: **{sub_name}**\n👇 **टेस्ट शुरू करें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
-    # ==========================================
-    # 3. मेनू बटन्स और शिकायत फ्लो (100% Fixed)
-    # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data in ["no_data", "menu_myscore", "menu_leaderboard", "menu_complaint"] or call.data.startswith("reply_"))
     def handle_general_menu(call):
         bot.answer_callback_query(call.id) 
         
-        if call.data == "no_data":
-            bot.send_message(call.from_user.id, "🚧 अभी कोई परीक्षा उपलब्ध नहीं है।")
-        elif call.data in ["menu_myscore", "menu_leaderboard"]:
-            bot.send_message(call.from_user.id, "🚧 यह फीचर जल्द ही आ रहा है!")
+        if call.data == "menu_myscore":
+            scores = database.get_user_scores(call.from_user.id)
+            if not scores: bot.send_message(call.message.chat.id, "🚧 आपने अभी तक कोई टेस्ट नहीं दिया है।")
+            else:
+                text = "📊 **आपका रिपोर्ट कार्ड (अंतिम 5):**\n\n"
+                for s in scores: text += f"📝 {s['test_name']} | अंक: `{s['score']}` | सटीकता: `{s['accuracy']}%`\n"
+                bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
+                
+        elif call.data == "menu_leaderboard":
+            top = database.get_top_scorers()
+            if not top: bot.send_message(call.message.chat.id, "🚧 अभी तक किसी ने टेस्ट नहीं दिया है।")
+            else:
+                text = "🏆 **टॉप 10 लीडरबोर्ड** 🏆\n\n"
+                for i, s in enumerate(top): text += f"{i+1}. {s['first_name']} - `{s['score']}` अंक\n"
+                bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
+                
         elif call.data == "menu_complaint":
-            msg = bot.send_message(call.from_user.id, "📝 **अपनी समस्या या शिकायत टाइप करें (फोटो भी भेज सकते हैं):**", parse_mode="Markdown")
+            msg = bot.send_message(call.from_user.id, "📝 **शिकायत टाइप करें:**", parse_mode="Markdown")
             bot.register_next_step_handler(msg, process_complaint)
+            
         elif call.data.startswith("reply_"):
             target = call.data.split("_")[1]
-            msg = bot.send_message(call.message.chat.id, "✍️ **छात्र के लिए रिप्लाई टाइप करें (अगला मैसेज सीधा छात्र को जाएगा):**", parse_mode="Markdown")
-            # यहाँ हमने target को भेज दिया है
+            msg = bot.send_message(call.message.chat.id, "✍️ **छात्र के लिए रिप्लाई टाइप करें:**", parse_mode="Markdown")
             bot.register_next_step_handler(msg, send_reply_to_user, target)
 
     def process_complaint(message):
         user_id = message.from_user.id
-        bot.send_message(user_id, "✅ शिकायत एडमिन को भेज दी गई है। कृपया उत्तर का इंतज़ार करें।")
+        bot.send_message(user_id, "✅ शिकायत एडमिन को भेज दी गई है।")
         admin_alert = f"🚨 **नई शिकायत:**\n👤 **छात्र:** {message.from_user.first_name} (`{user_id}`)\n💬 **समस्या:** {message.text or 'मीडिया'}"
         markup = InlineKeyboardMarkup().add(InlineKeyboardButton("↩️ रिप्लाई करें", callback_data=f"reply_{user_id}"))
-        
-        if message.content_type != 'text': 
-            bot.copy_message(config.COMPLAINT_CHANNEL_ID, user_id, message.message_id)
-        
+        if message.content_type != 'text': bot.copy_message(config.COMPLAINT_CHANNEL_ID, user_id, message.message_id)
         bot.send_message(config.COMPLAINT_CHANNEL_ID, admin_alert, reply_markup=markup, parse_mode='Markdown')
 
-    # 🛠️ यहाँ रिप्लाई की समस्या को हमेशा के लिए फिक्स कर दिया गया है
     def send_reply_to_user(message, target):
         try:
-            target_id = int(target) # ID को Text से Number में बदल दिया
-            bot.send_message(target_id, f"🎧 **एडमिन सपोर्ट से उत्तर:**\n\n{message.text}", parse_mode="Markdown")
-            bot.send_message(message.chat.id, "✅ **छात्र को सफलतापूर्वक रिप्लाई भेज दिया गया है।**", parse_mode="Markdown")
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ **एरर:** रिप्लाई नहीं गया। (कारण: {e})", parse_mode="Markdown")
+            bot.send_message(int(target), f"🎧 **एडमिन सपोर्ट से उत्तर:**\n\n{message.text}", parse_mode="Markdown")
+            bot.send_message(message.chat.id, "✅ **रिप्लाई भेज दिया गया है।**")
+        except Exception as e: bot.send_message(message.chat.id, f"❌ **एरर:** {e}")
 
-    # ==========================================
-    # क्रैश-प्रूफ रनिंग
-    # ==========================================
     if __name__ == "__main__":
         print("🚀 Bot Started Polling...", flush=True)
         while True:
-            try:
-                bot.infinity_polling(timeout=20, long_polling_timeout=10)
-            except Exception as e:
-                print(f"❌ POLLING ERROR: {e}", flush=True)
-                time.sleep(5)
+            try: bot.infinity_polling(timeout=20, long_polling_timeout=10)
+            except Exception as e: time.sleep(5)
 
 except Exception as e:
-    print("\n💥 CRITICAL STARTUP ERROR 💥", flush=True)
     traceback.print_exc()
