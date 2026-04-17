@@ -34,10 +34,21 @@ def register_admin_handlers(bot):
         if not is_admin(call.from_user.id) or call.data == "adm_main": return
         act = call.data.split("_")[1]
         
-        if act == "stats":
+                if act == "stats":
             st = database.get_bot_stats()
             mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
-            bot.edit_message_text(f"📊 **आंकड़े:**\n👥 कुल छात्र: `{st['total_users']}`\n🚫 बैन: `{st['banned_users']}`\n🎯 कुल टेस्ट: `{st['total_tests']}`\n✍️ कुल टेस्ट दिए गए: `{st['total_attempts']}`", chat_id, call.message.message_id, reply_markup=mk)
+            
+            text = (
+                "📊 **बॉट के विस्तृत आंकड़े (Bot Statistics)** 📊\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"👥 **कुल पंजीकृत छात्र:** `{st['total_users']}`\n"
+                f"🚫 **बैन किए गए छात्र:** `{st['banned_users']}`\n"
+                f"🎯 **कुल लाइव टेस्ट:** `{st['total_tests']}`\n"
+                f"✍️ **कुल टेस्ट दिए गए:** `{st['total_attempts']}`\n"
+                "━━━━━━━━━━━━━━━━━━"
+            )
+            bot.edit_message_text(text, chat_id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
+
         elif act == "addexam":
             msg = bot.send_message(chat_id, "📝 **नई परीक्षा का नाम लिखें:**")
             bot.register_next_step_handler(msg, lambda m: [database.add_category(m.text.strip(), "General"), bot.send_message(chat_id, "✅ जुड़ गया।", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 पैनल पर जाएँ", callback_data="adm_main")))])
