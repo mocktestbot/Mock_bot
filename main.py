@@ -12,6 +12,7 @@ try:
     import database
     import admin
 
+    # 🛡️ एंटी-क्रैश सिस्टम
     apihelper.RETRY_ON_ERROR = True
     bot = telebot.TeleBot(config.BOT_TOKEN)
     admin.register_admin_handlers(bot)
@@ -44,19 +45,18 @@ try:
                 mk = InlineKeyboardMarkup()
                 mk.add(InlineKeyboardButton("📢 पहले चैनल ज्वाइन करें", url=os.getenv("CHANNEL_LINK", "https://t.me/telegram")))
                 mk.add(InlineKeyboardButton("✅ मैंने ज्वाइन कर लिया है", callback_data="check_sub"))
-                bot.send_message(user_id, "🛑 **टेस्ट देने के लिए पहले चैनल ज्वाइन करना अनिवार्य है!**", reply_markup=mk)
+                bot.send_message(user_id, "🛑 **टेस्ट देने के लिए पहले हमारा मुख्य चैनल ज्वाइन करना अनिवार्य है!**", reply_markup=mk)
                 return
 
             if database.check_banned(user_id):
-                bot.send_message(user_id, "❌ आपको प्रतिबंधित कर दिया गया है।"); return
+                bot.send_message(user_id, "❌ आपको एडमिन द्वारा प्रतिबंधित कर दिया गया है।"); return
 
             if database.register_user(user_id, first_name, message.from_user.username or ""):
                 try:
                     log_id = os.getenv("LOG_CHANNEL_ID")
-                    if log_id: bot.send_message(log_id, f"🆕 **नया छात्र:**\n👤 {first_name}\n🔗 `{user_id}`")
+                    if log_id: bot.send_message(log_id, f"🆕 **नया छात्र जुड़ा:**\n👤 नाम: {first_name}\n🔗 ID: `{user_id}`")
                 except: pass
 
-            # 🎯 आपका पुराना वाला ओरिजिनल स्टार्ट मैसेज
             welcome_text = (
                 f"🎯 **स्वागत है {first_name}!** 🇮🇳\n"
                 "वर्दी के आपके सपने को हकीकत में बदलने के लिए हम तैयार हैं।\n\n"
@@ -70,7 +70,6 @@ try:
                 "⚠️ **डिस्क्लेमर (Disclaimer):**\n"
                 "*इस बॉट पर उपलब्ध सभी मॉक टेस्ट और सामग्री केवल छात्रों की शिक्षा (Educational Purposes) और अभ्यास के लिए है। इसका उद्देश्य किसी भी संस्थान के कॉपीराइट का उल्लंघन करना नहीं है। किसी भी विवाद के लिए एडमिन ज़िम्मेदार नहीं होगा।*"
             )
-
             bot.send_message(user_id, welcome_text, reply_markup=get_main_menu_markup(), parse_mode='Markdown')
         except Exception as e: print(f"❌ Start Error: {e}")
 
@@ -79,7 +78,7 @@ try:
         if is_subscribed(call.from_user.id):
             bot.delete_message(call.message.chat.id, call.message.message_id)
             send_welcome(call.message)
-        else: bot.answer_callback_query(call.id, "❌ पहले चैनल ज्वाइन करें!", show_alert=True)
+        else: bot.answer_callback_query(call.id, "❌ आपने अभी तक चैनल ज्वाइन नहीं किया है!", show_alert=True)
 
     @bot.callback_query_handler(func=lambda call: call.data == "menu_main")
     def back_to_main(call):
@@ -94,11 +93,17 @@ try:
         exam_name = call.data.replace("st_ex_", "")
         student_sessions[call.from_user.id] = {'exam': exam_name}
         subjects = database.get_subjects_by_exam(exam_name)
-        if not subjects: bot.send_message(call.message.chat.id, "🚧 विषय जोड़े जा रहे हैं।"); return
+        
         markup = InlineKeyboardMarkup()
-        for sub in subjects: markup.add(InlineKeyboardButton(sub, callback_data=f"st_su_{sub}"))
-        markup.add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="menu_main"))
-        bot.edit_message_text(f"🎯 परीक्षा: **{exam_name}**\n📚 **अपना विषय चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
+        if not subjects: 
+            markup.add(InlineKeyboardButton("🔙 वापस", callback_data="menu_main"))
+            bot.edit_message_text("🚧 अभी विषय जोड़े जा रहे हैं।", call.message.chat.id, call.message.message_id, reply_markup=markup); return
+        
+        for sub in subjects: markup.add(InlineKeyboardButton(f"📘 {sub}", callback_data=f"st_su_{sub}"))
+        markup.add(InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="menu_main"))
+        
+        text = f"✨ **परीक्षा:** {exam_name}\n━━━━━━━━━━━━━━━━━━\n📖 **अपना विषय (Subject) चुनें:**"
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("st_su_"))
     def handle_student_subject(call):
@@ -107,54 +112,145 @@ try:
         user_id = call.from_user.id
         exam_name = student_sessions.get(user_id, {}).get('exam')
         tests = database.get_public_tests(exam_name, sub_name)
-        if not tests: bot.send_message(call.message.chat.id, "🚧 टेस्ट उपलब्ध नहीं हैं।"); return
         
         markup = InlineKeyboardMarkup()
+        if not tests: 
+            markup.add(InlineKeyboardButton("🔙 वापस", callback_data=f"st_ex_{exam_name}"))
+            bot.edit_message_text("🚧 टेस्ट उपलब्ध नहीं हैं।", call.message.chat.id, call.message.message_id, reply_markup=markup); return
+        
         name_encoded = urllib.parse.quote(call.from_user.first_name)
         for t in tests:
             test_url = f"{config.WEBAPP_BASE_URL}{t['test_id']}&uid={user_id}&name={name_encoded}"
             markup.add(InlineKeyboardButton(f"📝 {t['test_name']}", web_app=WebAppInfo(url=test_url)))
-        markup.add(InlineKeyboardButton("🔙 वापस (Back)", callback_data=f"st_ex_{exam_name}"))
-        bot.edit_message_text(f"📚 विषय: **{sub_name}**\n👇 **टेस्ट शुरू करें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
+            
+        markup.add(InlineKeyboardButton("🔙 विषय सूची पर जाएं", callback_data=f"st_ex_{exam_name}"))
+        
+        text = (
+            f"📚 **विषय:** {sub_name}\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "✨ **निर्देश:**\n"
+            "🔸 टाइमर खत्म होने से पहले सबमिट करें।\n"
+            "🔸 1st Attempt का स्कोर ही लीडरबोर्ड में जाएगा।\n\n"
+            "👇 **अपना टेस्ट शुरू करें:**"
+        )
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
-    @bot.callback_query_handler(func=lambda call: call.data in ["no_data", "menu_myscore", "menu_leaderboard", "menu_complaint"] or call.data.startswith("reply_"))
+    # ==========================================
+    # 📊 स्कोरकार्ड फ्लो (मेरा स्कोर)
+    # ==========================================
+    @bot.callback_query_handler(func=lambda call: call.data == "menu_myscore")
+    def my_score_main(call):
+        bot.answer_callback_query(call.id)
+        exams = database.get_attempted_exams(call.from_user.id)
+        mk = InlineKeyboardMarkup()
+        if not exams:
+            mk.add(InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="menu_main"))
+            bot.edit_message_text("🚧 आपने अभी तक कोई टेस्ट नहीं दिया है।", call.message.chat.id, call.message.message_id, reply_markup=mk)
+            return
+        for e in exams: mk.add(InlineKeyboardButton(f"📘 {e}", callback_data=f"sc_ex_{e}"))
+        mk.add(InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="menu_main"))
+        bot.edit_message_text("📊 **आपका रिपोर्ट कार्ड**\n━━━━━━━━━━━━━━━━━━\n📖 **अपना एग्जाम चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("sc_ex_"))
+    def my_score_exam(call):
+        bot.answer_callback_query(call.id)
+        exam = call.data.replace("sc_ex_", "")
+        subs = database.get_attempted_subjects(call.from_user.id, exam)
+        mk = InlineKeyboardMarkup()
+        for s in subs: mk.add(InlineKeyboardButton(f"📗 {s}", callback_data=f"sc_su_{exam}_{s}"))
+        mk.add(InlineKeyboardButton("🔙 वापस", callback_data="menu_myscore"))
+        bot.edit_message_text(f"📊 **एग्जाम:** {exam}\n━━━━━━━━━━━━━━━━━━\n📖 **विषय चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("sc_su_"))
+    def my_score_sub(call):
+        bot.answer_callback_query(call.id)
+        parts = call.data.replace("sc_su_", "").split("_", 1)
+        exam, sub = parts[0], parts[1]
+        tests = database.get_attempted_tests(call.from_user.id, exam, sub)
+        mk = InlineKeyboardMarkup()
+        for t in tests: mk.add(InlineKeyboardButton(f"📝 {t['test_name']}", callback_data=f"sc_ts_{t['test_id']}"))
+        mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_ex_{exam}"))
+        bot.edit_message_text(f"📊 **विषय:** {sub}\n━━━━━━━━━━━━━━━━━━\n👇 **स्कोर देखने के लिए टेस्ट चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("sc_ts_"))
+    def my_score_test(call):
+        bot.answer_callback_query(call.id)
+        tid = call.data.replace("sc_ts_", "")
+        score_data = database.get_test_scorecard(call.from_user.id, tid)
+        test_info = database.get_test_details(tid)
+        if score_data and test_info:
+            text = f"📊 **स्कोरकार्ड: {score_data['test_name']}**\n━━━━━━━━━━━━━━━━━━\n"
+            text += f"🎯 **स्कोर:** `{score_data['score']}` / `{len(test_info['questions']) * test_info['positive_mark']}`\n"
+            text += f"📈 **सटीकता (Accuracy):** `{score_data['accuracy']}%`\n"
+            text += f"⏱ **कुल समय:** `{test_info['time_limit']}` मिनट\n"
+            text += f"📅 **तारीख:** `{score_data['date'].strftime('%d-%m-%Y %H:%M')}`\n"
+
+            mk = InlineKeyboardMarkup()
+            user_id = call.from_user.id
+            name_encoded = urllib.parse.quote(call.from_user.first_name)
+            test_url = f"{config.WEBAPP_BASE_URL}{tid}&uid={user_id}&name={name_encoded}"
+            mk.add(InlineKeyboardButton("🔄 टेस्ट फिर से दें (Reattempt)", web_app=WebAppInfo(url=test_url)))
+            mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_su_{score_data['exam_name']}_{score_data['subject_name']}"))
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
+        else:
+            bot.edit_message_text("❌ टेस्ट का डेटा नहीं मिला।", call.message.chat.id, call.message.message_id, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस", callback_data="menu_myscore")))
+
+    # ==========================================
+    # 🏆 स्मार्ट लीडरबोर्ड और शिकायत
+    # ==========================================
+    @bot.callback_query_handler(func=lambda call: call.data in ["menu_leaderboard", "menu_complaint"] or call.data.startswith("reply_"))
     def handle_general_menu(call):
-        bot.answer_callback_query(call.id) 
         mk_back = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="menu_main"))
         
-        if call.data == "menu_myscore":
-            scores = database.get_user_scores(call.from_user.id)
-            if not scores: bot.edit_message_text("🚧 आपने अभी तक कोई टेस्ट नहीं दिया है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
+        if call.data == "menu_leaderboard":
+            bot.answer_callback_query(call.id)
+            top_10, user_rank, user_data = database.get_smart_leaderboard(call.from_user.id)
+            if not top_10: 
+                bot.edit_message_text("🚧 अभी तक किसी ने टेस्ट नहीं दिया है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
             else:
-                text = "📊 **आपका रिपोर्ट कार्ड:**\n\n"
-                for s in scores: text += f"📝 {s['test_name']} | अंक: `{s['score']}` | सटीकता: `{s['accuracy']}%`\n"
-                bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=mk_back)
+                text = "🏆 **ऑल इंडिया लीडरबोर्ड** 🏆\n*(केवल 1st Attempt के आधार पर)*\n━━━━━━━━━━━━━━━━━━\n"
+                medals = ["🥇", "🥈", "🥉"]
                 
-        elif call.data == "menu_leaderboard":
-            top = database.get_top_scorers()
-            if not top: bot.edit_message_text("🚧 अभी लीडरबोर्ड खाली है।", call.message.chat.id, call.message.message_id, reply_markup=mk_back)
-            else:
-                text = "🏆 **टॉप 10 लीडरबोर्ड** 🏆\n\n"
-                for i, s in enumerate(top): text += f"{i+1}. {s['first_name']} - `{s['score']}` अंक\n"
+                for i, s in enumerate(top_10): 
+                    medal = medals[i] if i < 3 else f"  {i+1}. "
+                    text += f"{medal} **{s['first_name']}** ➔ `{s['total_score']}` अंक\n"
+                
+                text += "━━━━━━━━━━━━━━━━━━\n"
+                if user_rank:
+                    if user_rank <= 10:
+                        text += f"🎯 **आप टॉप 10 में हैं! (रैंक: {user_rank})** 🌟"
+                    else:
+                        text += f"📍 **आपकी वर्तमान रैंक:** `{user_rank}`\n"
+                        text += f"🔸 **आपका कुल स्कोर:** `{user_data['total_score']}` अंक\n"
+                        text += "*मेहनत करते रहें, टॉप 10 दूर नहीं! 💪*"
+                else:
+                    text += "📍 **आपकी रैंक:** `अभी कोई टेस्ट नहीं दिया`"
+                    
                 bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=mk_back)
                 
         elif call.data == "menu_complaint":
+            bot.answer_callback_query(call.id)
             msg = bot.send_message(call.from_user.id, "📝 **शिकायत टाइप करें:**", reply_markup=mk_back)
             bot.register_next_step_handler(msg, process_complaint)
             
         elif call.data.startswith("reply_"):
             target = call.data.split("_")[1]
-            msg = bot.send_message(call.message.chat.id, "✍️ **रिप्लाई टाइप करें:**")
+            # 🛠️ एडमिन रिप्लाई फिक्स: मैसेज चैनल में नहीं, सीधा एडमिन के DM में भेजा जाएगा!
+            bot.answer_callback_query(call.id, "कृपया बॉट के DM (निजी मैसेज) में जाकर रिप्लाई टाइप करें।", show_alert=True)
+            msg = bot.send_message(call.from_user.id, f"✍️ **छात्र (`{target}`) के लिए रिप्लाई टाइप करें:**")
             bot.register_next_step_handler(msg, send_reply_to_user, target)
 
     def process_complaint(message):
         bot.send_message(message.from_user.id, "✅ शिकायत एडमिन को भेज दी गई है।")
         markup = InlineKeyboardMarkup().add(InlineKeyboardButton("↩️ रिप्लाई करें", callback_data=f"reply_{message.from_user.id}"))
-        bot.send_message(config.COMPLAINT_CHANNEL_ID, f"🚨 **शिकायत:** {message.text}", reply_markup=markup)
+        bot.send_message(config.COMPLAINT_CHANNEL_ID, f"🚨 **नई शिकायत:**\n👤 **छात्र:** {message.from_user.first_name}\n💬 {message.text}", reply_markup=markup)
 
     def send_reply_to_user(message, target):
-        try: bot.send_message(int(target), f"🎧 **एडमिन उत्तर:**\n{message.text}")
-        except: pass
+        try: 
+            bot.send_message(int(target), f"🎧 **एडमिन सपोर्ट से उत्तर:**\n━━━━━━━━━━━━━━━━━━\n{message.text}", parse_mode="Markdown")
+            bot.send_message(message.chat.id, "✅ **छात्र को सफलतापूर्वक रिप्लाई भेज दिया गया है।**")
+        except Exception as e: 
+            bot.send_message(message.chat.id, f"❌ एरर: {e}")
 
     if __name__ == "__main__":
         print("🚀 Bot Started Polling...", flush=True)
@@ -165,7 +261,6 @@ try:
                 else: time.sleep(5)
 
 except Exception as e:
-    print(f"\n💥 CRITICAL STARTUP ERROR 💥", flush=True)
-    print(f"Error: {e}", flush=True)
+    print(f"\n💥 CRITICAL STARTUP ERROR 💥\nError: {e}", flush=True)
     traceback.print_exc()
-    time.sleep(60) # यह रेंडर को लॉग्स प्रिंट करने का समय देगा
+    time.sleep(60)
