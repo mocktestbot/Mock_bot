@@ -4,11 +4,13 @@ import json
 import requests
 import config
 import database
+import time
 
 admin_data = {}
 
 def register_admin_handlers(bot):
-    def is_admin(user_id): return str(user_id) in config.ADMIN_IDS
+    def is_admin(user_id): 
+        return str(user_id) in config.ADMIN_IDS
 
     def render_admin_panel(chat_id, user_id, message_id=None):
         if not is_admin(user_id): return
@@ -20,8 +22,10 @@ def register_admin_handlers(bot):
         markup.row(InlineKeyboardButton("🚫 बैन/अनबैन", callback_data="adm_ban"))
         
         text = "👑 **सुपर एडमिन डैशबोर्ड**\nयहाँ से पूरे बॉट को कंट्रोल करें:"
-        if message_id: bot.edit_message_text(text, chat_id, message_id, reply_markup=markup, parse_mode="Markdown")
-        else: bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
+        if message_id:
+            bot.edit_message_text(text, chat_id, message_id, reply_markup=markup, parse_mode="Markdown")
+        else:
+            bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
 
     @bot.message_handler(commands=['admin', 'panel'])
     def show_admin_panel_cmd(message):
@@ -113,7 +117,6 @@ def register_admin_handlers(bot):
             else: bot.send_message(message.chat.id, "❌ यह यूज़र डेटाबेस में नहीं मिला।", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस", callback_data="adm_main")))
         except: bot.send_message(message.chat.id, "❌ कृपया सही नंबर (ID) डालें।")
 
-    # 🖼️ FIX: Image Uploader with Headers
     def make_image_link(message):
         if message.content_type != 'photo':
             bot.send_message(message.chat.id, "⚠️ कृपया सिर्फ फोटो भेजें।"); return
@@ -121,26 +124,11 @@ def register_admin_handlers(bot):
         try:
             file_info = bot.get_file(message.photo[-1].file_id)
             downloaded_file = bot.download_file(file_info.file_path)
-            
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            
-            # कोशिश 1: Catbox
-            try:
-                res = requests.post('https://catbox.moe/user/api.php', data={'reqtype': 'fileupload'}, files={'fileToUpload': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=15, headers=headers)
-                if res.status_code == 200 and "catbox.moe" in res.text:
-                    mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
-                    bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`{res.text}`", message.chat.id, load_msg.message_id, reply_markup=mk)
-                    return
-            except: pass
-            
-            # कोशिश 2: Telegraph
-            res2 = requests.post('https://telegra.ph/upload', files={'file': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=15)
-            if res2.status_code == 200 and 'src' in res2.json()[0]:
+            res = requests.post('https://telegra.ph/upload', files={'file': ('image.jpg', downloaded_file, 'image/jpeg')}, timeout=20)
+            if res.status_code == 200 and 'src' in res.json()[0]:
                 mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस (Back)", callback_data="adm_main"))
-                bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`https://telegra.ph{res2.json()[0]['src']}`", message.chat.id, load_msg.message_id, reply_markup=mk)
-            else: 
-                bot.edit_message_text("❌ अपलोड फेल। सर्वर डाउन है।", message.chat.id, load_msg.message_id)
-                
+                bot.edit_message_text(f"✅ **इमेज लिंक तैयार है:**\n\n`https://telegra.ph{res.json()[0]['src']}`", message.chat.id, load_msg.message_id, reply_markup=mk)
+            else: bot.edit_message_text("❌ अपलोड फेल।", message.chat.id, load_msg.message_id)
         except Exception as e:
             bot.edit_message_text(f"❌ सर्वर एरर: {e}", message.chat.id, load_msg.message_id)
 
@@ -216,7 +204,9 @@ def register_admin_handlers(bot):
                 file_info = bot.get_file(m.document.file_id)
                 jd = json.loads(bot.download_file(file_info.file_path))
                 database.save_test(d['id'], d['exam'], d['sub'], d['name'], d['pos_mark'], d['neg_mark'], d['cutoff'], d['time_limit'], jd)
-                preview_url = f"{config.WEBAPP_BASE_URL}{d['id']}"
+                
+                # 🚀 FIX: Cache Buster लगा दिया है 
+                preview_url = f"{config.WEBAPP_BASE_URL}{d['id']}&v={int(time.time())}"
                 mk = InlineKeyboardMarkup().add(InlineKeyboardButton("👁️ प्रीव्यू", web_app=WebAppInfo(url=preview_url))).add(InlineKeyboardButton("📢 पब्लिक करें", callback_data=f"pub_{d['id']}"))
                 bot.send_message(m.chat.id, f"✅ **सेव हो गया!**\n⏱ समय: {d['time_limit']} मिनट\n✅ सही: +{d['pos_mark']} | ❌ गलत: -{d['neg_mark']}", reply_markup=mk)
             except Exception as e:
