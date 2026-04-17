@@ -61,13 +61,13 @@ try:
                 "वर्दी के आपके सपने को हकीकत में बदलने के लिए हम तैयार हैं।\n\n"
                 "यह सिर्फ एक बॉट नहीं, आपका **स्मार्ट टेस्ट सेंटर** है। यहाँ आपको मिलता है असली परीक्षा (CBT) वाला अनुभव:\n\n"
                 "✨ **हमारे मुख्य फीचर्स:**\n"
-                "⏱ **लाइव टेस्ट इंटरफेस:** बिल्कुल असली परीक्षा पैटर्न वाला टाइमर।\n"
-                "📊 **तुरंत स्कोरकार्ड:** टेस्ट सबमिट करते ही अपना रिज़ल्ट जानें।\n"
-                "🏆 **रीयल-टाइम रैंक:** लीडरबोर्ड पर देखें कि आप कंपटीशन में कहाँ हैं।\n"
-                "📂 **टेस्ट हिस्ट्री:** अपने पिछले सभी स्कोर्स का रिकॉर्ड एक ही जगह पाएं।\n\n"
+                "⏱ **लाइव टेस्ट इंटरफेस:** बिल्कुल असली परीक्षा पैटर्न वाला टाइमर.\n"
+                "📊 **तुरंत स्कोरकार्ड:** टेस्ट सबमिट करते ही अपना रिज़ल्ट जानें.\n"
+                "🏆 **रीयल-टाइम रैंक:** लीडरबोर्ड पर देखें कि आप कंपटीशन में कहाँ हैं.\n"
+                "📂 **टेस्ट हिस्ट्री:** अपने पिछले सभी स्कोर्स का रिकॉर्ड एक ही जगह पाएं.\n\n"
                 "👇 **अपनी तैयारी शुरू करने के लिए नीचे अपना 'टारगेट एग्जाम' चुनें:**\n\n"
                 "⚠️ **डिस्क्लेमर (Disclaimer):**\n"
-                "*इस बॉट पर उपलब्ध सभी मॉक टेस्ट और सामग्री केवल छात्रों की शिक्षा (Educational Purposes) और अभ्यास के लिए है। इसका उद्देश्य किसी भी संस्थान के कॉपीराइट का उल्लंघन करना नहीं है। किसी भी विवाद के लिए एडमिन ज़िम्मेदार नहीं होगा।*"
+                "*इस बॉट पर उपलब्ध सभी मॉक टेस्ट और सामग्री केवल छात्रों की शिक्षा (Educational Purposes) और अभ्यास के लिए है।*"
             )
             bot.send_message(user_id, welcome_text, reply_markup=get_main_menu_markup(), parse_mode='Markdown')
         except Exception as e: print(f"❌ Start Error: {e}")
@@ -129,7 +129,7 @@ try:
             "━━━━━━━━━━━━━━━━━━\n"
             "✨ **निर्देश:**\n"
             "🔸 टाइमर खत्म होने से पहले सबमिट करें।\n"
-            "🔸 1st Attempt का स्कोर ही लीडरबोर्ड में जाएगा।\n\n"
+            "🔸 केवल 1st Attempt का स्कोर ही लीडरबोर्ड में जाएगा।\n\n"
             "👇 **अपना टेस्ट शुरू करें:**"
         )
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
@@ -171,25 +171,30 @@ try:
         mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_ex_{exam}"))
         bot.edit_message_text(f"📊 **विषय:** {sub}\n━━━━━━━━━━━━━━━━━━\n👇 **स्कोर देखने के लिए टेस्ट चुनें:**", call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
 
+    # 🛠️ FIX: पुराने डेटा की वजह से आने वाला एरर ठीक कर दिया
     @bot.callback_query_handler(func=lambda call: call.data.startswith("sc_ts_"))
     def my_score_test(call):
         bot.answer_callback_query(call.id)
         tid = call.data.replace("sc_ts_", "")
         score_data = database.get_test_scorecard(call.from_user.id, tid)
         test_info = database.get_test_details(tid)
+        
         if score_data and test_info:
-            text = f"📊 **स्कोरकार्ड: {score_data['test_name']}**\n━━━━━━━━━━━━━━━━━━\n"
-            text += f"🎯 **स्कोर:** `{score_data['score']}` / `{len(test_info['questions']) * test_info['positive_mark']}`\n"
-            text += f"📈 **सटीकता (Accuracy):** `{score_data['accuracy']}%`\n"
-            text += f"⏱ **कुल समय:** `{test_info['time_limit']}` मिनट\n"
-            text += f"📅 **तारीख:** `{score_data['date'].strftime('%d-%m-%Y %H:%M')}`\n"
+            text = f"📊 **स्कोरकार्ड: {score_data.get('test_name', 'Mock Test')}**\n━━━━━━━━━━━━━━━━━━\n"
+            text += f"🎯 **स्कोर:** `{score_data.get('score', 0)}` / `{len(test_info.get('questions', [])) * test_info.get('positive_mark', 2.0)}`\n"
+            text += f"📈 **सटीकता:** `{score_data.get('accuracy', '0')}%`\n"
+            text += f"⏱ **कुल समय:** `{test_info.get('time_limit', 15)}` मिनट\n"
+            
+            date_val = score_data.get('date')
+            date_str = date_val.strftime('%d-%m-%Y %H:%M') if date_val else "पुराना डेटा"
+            text += f"📅 **तारीख:** `{date_str}`\n"
 
             mk = InlineKeyboardMarkup()
             user_id = call.from_user.id
             name_encoded = urllib.parse.quote(call.from_user.first_name)
             test_url = f"{config.WEBAPP_BASE_URL}{tid}&uid={user_id}&name={name_encoded}"
             mk.add(InlineKeyboardButton("🔄 टेस्ट फिर से दें (Reattempt)", web_app=WebAppInfo(url=test_url)))
-            mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_su_{score_data['exam_name']}_{score_data['subject_name']}"))
+            mk.add(InlineKeyboardButton("🔙 वापस", callback_data=f"sc_su_{score_data.get('exam_name', 'Unknown')}_{score_data.get('subject_name', 'Unknown')}"))
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=mk, parse_mode="Markdown")
         else:
             bot.edit_message_text("❌ टेस्ट का डेटा नहीं मिला।", call.message.chat.id, call.message.message_id, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस", callback_data="menu_myscore")))
