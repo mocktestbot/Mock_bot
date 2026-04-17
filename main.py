@@ -165,4 +165,7 @@ try:
                 else: time.sleep(5)
 
 except Exception as e:
+    print(f"\n💥 CRITICAL STARTUP ERROR 💥", flush=True)
+    print(f"Error: {e}", flush=True)
     traceback.print_exc()
+    time.sleep(60) # यह रेंडर को लॉग्स प्रिंट करने का समय देगा
