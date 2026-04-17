@@ -66,18 +66,65 @@ def delete_test(test_id):
 def get_bot_stats():
     return {"total_users": users_col.count_documents({}), "banned_users": users_col.count_documents({"is_banned": True}), "total_tests": tests_col.count_documents({"is_public": True}), "total_attempts": scores_col.count_documents({})}
 
-def save_score(user_id, first_name, test_id, test_name, score, accuracy):
-    scores_col.insert_one({"user_id": user_id, "first_name": first_name, "test_id": test_id, "test_name": test_name, "score": score, "accuracy": accuracy, "date": datetime.now()})
-    users_col.update_one({"user_id": user_id}, {"$inc": {"total_tests_attempted": 1}})
-
-def get_user_scores(user_id):
-    return list(scores_col.find({"user_id": user_id}).sort("date", -1).limit(5)) 
-
-def get_top_scorers():
-    return list(scores_col.find().sort("score", -1).limit(10)) 
-
 def get_all_users():
     return [user['user_id'] for user in users_col.find({}, {"_id": 0, "user_id": 1})]
 
 def get_user_info(user_id):
     return users_col.find_one({"user_id": user_id}, {"_id": 0})
+
+# ==========================================
+# 📊 स्कोरकार्ड फ्लो और स्मार्ट लीडरबोर्ड लॉजिक
+# ==========================================
+def save_score(user_id, first_name, test_id, test_name, score, accuracy):
+    t_info = get_test_details(test_id)
+    exam_name = t_info['exam_name'] if t_info else "Unknown"
+    subject_name = t_info['subject_name'] if t_info else "Unknown"
+
+    existing = scores_col.find_one({"user_id": user_id, "test_id": test_id})
+    is_first_attempt = False if existing else True
+
+    scores_col.insert_one({
+        "user_id": user_id, "first_name": first_name, "test_id": test_id, "test_name": test_name, 
+        "exam_name": exam_name, "subject_name": subject_name, "score": score, 
+        "accuracy": accuracy, "is_first_attempt": is_first_attempt, "date": datetime.now()
+    })
+    if is_first_attempt:
+        users_col.update_one({"user_id": user_id}, {"$inc": {"total_tests_attempted": 1}})
+
+# स्कोरकार्ड फ्लो के लिए 4 नए फंक्शन
+def get_attempted_exams(user_id):
+    return scores_col.distinct("exam_name", {"user_id": user_id})
+
+def get_attempted_subjects(user_id, exam_name):
+    return scores_col.distinct("subject_name", {"user_id": user_id, "exam_name": exam_name})
+
+def get_attempted_tests(user_id, exam_name, subject_name):
+    tests = scores_col.find({"user_id": user_id, "exam_name": exam_name, "subject_name": subject_name}).sort("date", -1)
+    unique_tests = {}
+    for t in tests:
+        if t['test_id'] not in unique_tests: unique_tests[t['test_id']] = t
+    return list(unique_tests.values())
+
+def get_test_scorecard(user_id, test_id):
+    return scores_col.find_one({"user_id": user_id, "test_id": test_id}, sort=[("date", -1)])
+
+# स्मार्ट लीडरबोर्ड (केवल 1st Attempt)
+def get_smart_leaderboard(user_id):
+    pipeline = [
+        {"$match": {"is_first_attempt": True}},
+        {"$group": {"_id": "$user_id", "first_name": {"$first": "$first_name"}, "total_score": {"$sum": "$score"}}},
+        {"$sort": {"total_score": -1}}
+    ]
+    all_users = list(scores_col.aggregate(pipeline))
+    
+    top_10 = all_users[:10]
+    user_rank = None
+    user_data = None
+    
+    for i, res in enumerate(all_users):
+        if res["_id"] == user_id:
+            user_rank = i + 1
+            user_data = res
+            break
+            
+    return top_10, user_rank, user_data
