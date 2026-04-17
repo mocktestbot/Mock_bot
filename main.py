@@ -16,7 +16,7 @@ try:
     admin.register_admin_handlers(bot)
 
     # ==========================================
-    # 1. स्टार्ट कमांड और मुख्य मेनू
+    # 1. स्टार्ट कमांड और मुख्य मेनू (पुराने लंबे मैसेज के साथ)
     # ==========================================
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
@@ -30,11 +30,19 @@ try:
 
             database.register_user(user_id, first_name, message.from_user.username or "")
 
+            # 🎯 आपका पुराना और सबसे शानदार स्टार्ट मैसेज 🎯
             welcome_text = (
                 f"🎯 **स्वागत है {first_name}!** 🇮🇳\n"
                 "वर्दी के आपके सपने को हकीकत में बदलने के लिए हम तैयार हैं।\n\n"
-                "यह सिर्फ एक बॉट नहीं, आपका **स्मार्ट टेस्ट सेंटर** है।\n\n"
-                "👇 **अपनी तैयारी शुरू करने के लिए नीचे अपना 'टारगेट एग्जाम' चुनें:**"
+                "यह सिर्फ एक बॉट नहीं, आपका **स्मार्ट टेस्ट सेंटर** है। यहाँ आपको मिलता है असली परीक्षा (CBT) वाला अनुभव:\n\n"
+                "✨ **हमारे मुख्य फीचर्स:**\n"
+                "⏱ **लाइव टेस्ट इंटरफेस:** बिल्कुल असली परीक्षा पैटर्न वाला टाइमर।\n"
+                "📊 **तुरंत स्कोरकार्ड:** टेस्ट सबमिट करते ही अपना रिज़ल्ट जानें।\n"
+                "🏆 **रीयल-टाइम रैंक:** लीडरबोर्ड पर देखें कि आप कंपटीशन में कहाँ हैं।\n"
+                "📂 **टेस्ट हिस्ट्री:** अपने पिछले सभी स्कोर्स का रिकॉर्ड एक ही जगह पाएं।\n\n"
+                "👇 **अपनी तैयारी शुरू करने के लिए नीचे अपना 'टारगेट एग्जाम' चुनें:**\n\n"
+                "⚠️ **डिस्क्लेमर (Disclaimer):**\n"
+                "*इस बॉट पर उपलब्ध सभी मॉक टेस्ट और सामग्री केवल छात्रों की शिक्षा (Educational Purposes) और अभ्यास के लिए है। इसका उद्देश्य किसी भी संस्थान के कॉपीराइट का उल्लंघन करना नहीं है। किसी भी विवाद के लिए एडमिन ज़िम्मेदार नहीं होगा।*"
             )
 
             markup = InlineKeyboardMarkup()
@@ -48,7 +56,6 @@ try:
             
             markup.row(InlineKeyboardButton("📊 मेरा स्कोर", callback_data="menu_myscore"), InlineKeyboardButton("🏆 लीडरबोर्ड", callback_data="menu_leaderboard"))
             
-            # यहाँ os.getenv काम करेगा क्योंकि हमने ऊपर import os लगा दिया है
             channel_link = os.getenv("CHANNEL_LINK", "https://t.me/telegram")
             markup.row(InlineKeyboardButton("📢 हमारा चैनल", url=channel_link), InlineKeyboardButton("🎧 सहायता / शिकायत", callback_data="menu_complaint"))
 
@@ -99,7 +106,7 @@ try:
         bot.edit_message_text(f"📚 विषय: **{sub_name}**\n👇 **नीचे दिए गए टेस्ट पर क्लिक करके शुरू करें:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
     # ==========================================
-    # 3. मेनू बटन्स और शिकायत फ्लो
+    # 3. मेनू बटन्स और शिकायत फ्लो (100% Fixed)
     # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data in ["no_data", "menu_myscore", "menu_leaderboard", "menu_complaint"] or call.data.startswith("reply_"))
     def handle_general_menu(call):
@@ -114,23 +121,29 @@ try:
             bot.register_next_step_handler(msg, process_complaint)
         elif call.data.startswith("reply_"):
             target = call.data.split("_")[1]
-            msg = bot.send_message(call.message.chat.id, "✍️ **छात्र के लिए रिप्लाई टाइप करें:**", parse_mode="Markdown")
+            msg = bot.send_message(call.message.chat.id, "✍️ **छात्र के लिए रिप्लाई टाइप करें (अगला मैसेज सीधा छात्र को जाएगा):**", parse_mode="Markdown")
+            # यहाँ हमने target को भेज दिया है
             bot.register_next_step_handler(msg, send_reply_to_user, target)
 
     def process_complaint(message):
         user_id = message.from_user.id
-        bot.send_message(user_id, "✅ शिकायत एडमिन को भेज दी गई है।")
+        bot.send_message(user_id, "✅ शिकायत एडमिन को भेज दी गई है। कृपया उत्तर का इंतज़ार करें।")
         admin_alert = f"🚨 **नई शिकायत:**\n👤 **छात्र:** {message.from_user.first_name} (`{user_id}`)\n💬 **समस्या:** {message.text or 'मीडिया'}"
         markup = InlineKeyboardMarkup().add(InlineKeyboardButton("↩️ रिप्लाई करें", callback_data=f"reply_{user_id}"))
-        if message.content_type != 'text': bot.copy_message(config.COMPLAINT_CHANNEL_ID, user_id, message.message_id)
+        
+        if message.content_type != 'text': 
+            bot.copy_message(config.COMPLAINT_CHANNEL_ID, user_id, message.message_id)
+        
         bot.send_message(config.COMPLAINT_CHANNEL_ID, admin_alert, reply_markup=markup, parse_mode='Markdown')
 
+    # 🛠️ यहाँ रिप्लाई की समस्या को हमेशा के लिए फिक्स कर दिया गया है
     def send_reply_to_user(message, target):
         try:
-            bot.send_message(target, f"🎧 **एडमिन उत्तर:**\n\n{message.text}", parse_mode="Markdown")
-            bot.send_message(message.chat.id, "✅ रिप्लाई भेज दिया गया।")
+            target_id = int(target) # ID को Text से Number में बदल दिया
+            bot.send_message(target_id, f"🎧 **एडमिन सपोर्ट से उत्तर:**\n\n{message.text}", parse_mode="Markdown")
+            bot.send_message(message.chat.id, "✅ **छात्र को सफलतापूर्वक रिप्लाई भेज दिया गया है।**", parse_mode="Markdown")
         except Exception as e:
-            bot.send_message(message.chat.id, f"❌ एरर: {e}")
+            bot.send_message(message.chat.id, f"❌ **एरर:** रिप्लाई नहीं गया। (कारण: {e})", parse_mode="Markdown")
 
     # ==========================================
     # क्रैश-प्रूफ रनिंग
