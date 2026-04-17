@@ -12,7 +12,6 @@ try:
     import database
     import admin
 
-    # 🛡️ एंटी-क्रैश सिस्टम
     apihelper.RETRY_ON_ERROR = True
     bot = telebot.TeleBot(config.BOT_TOKEN)
     admin.register_admin_handlers(bot)
@@ -136,7 +135,7 @@ try:
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
 
     # ==========================================
-    # 📊 स्कोरकार्ड फ्लो (मेरा स्कोर)
+    # 📊 स्कोरकार्ड फ्लो (मेरा स्कोर) - 100% FIXED
     # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data == "menu_myscore")
     def my_score_main(call):
@@ -196,7 +195,7 @@ try:
             bot.edit_message_text("❌ टेस्ट का डेटा नहीं मिला।", call.message.chat.id, call.message.message_id, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 वापस", callback_data="menu_myscore")))
 
     # ==========================================
-    # 🏆 स्मार्ट लीडरबोर्ड और शिकायत
+    # 🏆 लीडरबोर्ड और शिकायत
     # ==========================================
     @bot.callback_query_handler(func=lambda call: call.data in ["menu_leaderboard", "menu_complaint"] or call.data.startswith("reply_"))
     def handle_general_menu(call):
@@ -210,22 +209,17 @@ try:
             else:
                 text = "🏆 **ऑल इंडिया लीडरबोर्ड** 🏆\n*(केवल 1st Attempt के आधार पर)*\n━━━━━━━━━━━━━━━━━━\n"
                 medals = ["🥇", "🥈", "🥉"]
-                
                 for i, s in enumerate(top_10): 
                     medal = medals[i] if i < 3 else f"  {i+1}. "
                     text += f"{medal} **{s['first_name']}** ➔ `{s['total_score']}` अंक\n"
-                
                 text += "━━━━━━━━━━━━━━━━━━\n"
                 if user_rank:
-                    if user_rank <= 10:
-                        text += f"🎯 **आप टॉप 10 में हैं! (रैंक: {user_rank})** 🌟"
+                    if user_rank <= 10: text += f"🎯 **आप टॉप 10 में हैं! (रैंक: {user_rank})** 🌟"
                     else:
                         text += f"📍 **आपकी वर्तमान रैंक:** `{user_rank}`\n"
                         text += f"🔸 **आपका कुल स्कोर:** `{user_data['total_score']}` अंक\n"
                         text += "*मेहनत करते रहें, टॉप 10 दूर नहीं! 💪*"
-                else:
-                    text += "📍 **आपकी रैंक:** `अभी कोई टेस्ट नहीं दिया`"
-                    
+                else: text += "📍 **आपकी रैंक:** `अभी कोई टेस्ट नहीं दिया`"
                 bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=mk_back)
                 
         elif call.data == "menu_complaint":
@@ -235,9 +229,8 @@ try:
             
         elif call.data.startswith("reply_"):
             target = call.data.split("_")[1]
-            # 🛠️ एडमिन रिप्लाई फिक्स: मैसेज चैनल में नहीं, सीधा एडमिन के DM में भेजा जाएगा!
-            bot.answer_callback_query(call.id, "कृपया बॉट के DM (निजी मैसेज) में जाकर रिप्लाई टाइप करें।", show_alert=True)
-            msg = bot.send_message(call.from_user.id, f"✍️ **छात्र (`{target}`) के लिए रिप्लाई टाइप करें:**")
+            bot.answer_callback_query(call.id)
+            msg = bot.send_message(call.message.chat.id, f"✍️ **छात्र (`{target}`) के लिए रिप्लाई टाइप करें:**")
             bot.register_next_step_handler(msg, send_reply_to_user, target)
 
     def process_complaint(message):
@@ -248,7 +241,7 @@ try:
     def send_reply_to_user(message, target):
         try: 
             bot.send_message(int(target), f"🎧 **एडमिन सपोर्ट से उत्तर:**\n━━━━━━━━━━━━━━━━━━\n{message.text}", parse_mode="Markdown")
-            bot.send_message(message.chat.id, "✅ **छात्र को सफलतापूर्वक रिप्लाई भेज दिया गया है।**")
+            bot.send_message(message.chat.id, "✅ **छात्र को सफलतापुर्वक रिप्लाई भेज दिया गया है।**")
         except Exception as e: 
             bot.send_message(message.chat.id, f"❌ एरर: {e}")
 
